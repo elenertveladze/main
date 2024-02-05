@@ -1,0 +1,220 @@
+// InsuranceProduct.cs
+public class InsuranceProduct
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Category { get; set; }
+    public string Type { get; set; }
+    public string InsuranceType { get; set; }
+    public decimal InsurancePremium { get; set; }
+    public string TermsAndConditions { get; set; }
+}
+
+// ApplicationUser.cs
+public class ApplicationUser
+{
+    public int Id { get; set; }
+    public string UserName { get; set; }
+    public ICollection<InsuranceProduct> InsuranceProducts { get; set; }
+}
+
+// ApplicationDbContext.cs
+public class ApplicationDbContext : DbContext
+{
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
+
+    public DbSet<InsuranceProduct> InsuranceProducts { get; set; }
+    public DbSet<ApplicationUser> ApplicationUsers { get; set; }
+}
+
+// IRepository.cs
+public interface IRepository<T> where T : class
+{
+    IQueryable<T> GetAll();
+    T GetById(int id);
+    void Add(T entity);
+    void Update(T entity);
+    void Delete(T entity);
+    void SaveChanges();
+}
+
+// Repository.cs
+public class Repository<T> : IRepository<T> where T : class
+{
+    private readonly ApplicationDbContext _context;
+    private readonly DbSet<T> _dbSet;
+
+    public Repository(ApplicationDbContext context)
+    {
+        _context = context;
+        _dbSet = context.Set<T>();
+    }
+
+    public IQueryable<T> GetAll()
+    {
+        return _dbSet.AsQueryable();
+    }
+
+    public T GetById(int id)
+    {
+        return _dbSet.Find(id);
+    }
+
+    public void Add(T entity)
+    {
+        _dbSet.Add(entity);
+    }
+
+    public void Update(T entity)
+    {
+        _context.Entry(entity).State = EntityState.Modified;
+    }
+
+    public void Delete(T entity)
+    {
+        _dbSet.Remove(entity);
+    }
+
+    public void SaveChanges()
+    {
+        _context.SaveChanges();
+    }
+}
+
+// IUnitOfWork.cs
+public interface IUnitOfWork
+{
+    IRepository<InsuranceProduct> InsuranceProductRepository { get; }
+    IRepository<ApplicationUser> ApplicationUserRepository { get; }
+    void SaveChanges();
+}
+
+// UnitOfWork.cs
+public class UnitOfWork : IUnitOfWork
+{
+    private readonly ApplicationDbContext _context;
+
+    public UnitOfWork(ApplicationDbContext context)
+    {
+        _context = context;
+        InsuranceProductRepository = new Repository<InsuranceProduct>(context);
+        ApplicationUserRepository = new Repository<ApplicationUser>(context);
+    }
+
+    public IRepository<InsuranceProduct> InsuranceProductRepository { get; }
+    public IRepository<ApplicationUser> ApplicationUserRepository { get; }
+
+    public void SaveChanges()
+    {
+        _context.SaveChanges();
+    }
+}
+
+// InsuranceController.cs
+[ApiController]
+[Route("api/[controller]")]
+public class InsuranceController : ControllerBase
+{
+    private readonly IUnitOfWork _unitOfWork;
+
+    public InsuranceController(IUnitOfWork unitOfWork)
+    {
+        _unitOfWork = unitOfWork;
+    }
+
+    [HttpPost]
+    public IActionResult AddInsuranceProduct(InsuranceProduct insuranceProduct)
+    {
+        // Add validation logic here
+
+        _unitOfWork.InsuranceProductRepository.Add(insuranceProduct);
+        _unitOfWork.SaveChanges();
+
+        return Ok();
+    }
+
+    [HttpPut("{id}")]
+    public IActionResult UpdateInsuranceProduct(int id, InsuranceProduct insuranceProduct)
+    {
+        // Add validation logic here
+
+        var existingProduct = _unitOfWork.InsuranceProductRepository.GetById(id);
+        if (existingProduct == null)
+            return NotFound();
+
+        existingProduct.Name = insuranceProduct.Name;
+        // Update other properties
+
+        _unitOfWork.InsuranceProductRepository.Update(existingProduct);
+        _unitOfWork.SaveChanges();
+
+        return Ok();
+    }
+
+    [HttpPost("sell/{productId}/{userId}")]
+    public IActionResult SellInsuranceProduct(int productId, int userId)
+    {
+        // Add validation logic here
+
+        var insuranceProduct = _unitOfWork.InsuranceProductRepository.GetById(productId);
+        var user = _unitOfWork.ApplicationUserRepository.GetById(userId);
+
+        if (insuranceProduct == null || user == null)
+            return NotFound();
+
+        user.InsuranceProducts.Add(insuranceProduct);
+        _unitOfWork.SaveChanges();
+
+        return Ok();
+    }
+
+    [HttpPatch("change-limit/{productId}")]
+    public IActionResult ChangeInsuranceLimit(int productId, decimal newLimit)
+    {
+        // Add validation logic here
+
+        var insuranceProduct = _unitOfWork.InsuranceProductRepository.GetById(productId);
+
+        if (insuranceProduct == null)
+            return NotFound();
+
+        insuranceProduct.InsurancePremium = newLimit;
+        _unitOfWork.SaveChanges();
+
+        return Ok();
+    }
+
+    [HttpGet("{id}")]
+    public IActionResult GetInsuranceProduct(int id)
+    {
+        var insuranceProduct = _unitOfWork.InsuranceProductRepository.GetById(id);
+
+        if (insuranceProduct == null)
+            return NotFound();
+
+        return Ok(insuranceProduct);
+    }
+}
+
+// Startup.cs
+public void ConfigureServices(IServiceCollection services)
+{
+    services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection")));
+
+    services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+    // Other configurations...
+}
+
+// appsettings.json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Your_Connection_String_Here"
+  },
+  // Other configurations...
+}
+
+// Run the Migrations
+dotnet ef migrations add InitialCreate
+dotnet ef database update
