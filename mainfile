@@ -196,7 +196,7 @@ public class InsuranceController : ControllerBase
     }
 }
 
-// Startup.cs
+// Startup.cs --p
 public void ConfigureServices(IServiceCollection services)
 {
     services.AddDbContext<ApplicationDbContext>(options =>
@@ -207,7 +207,7 @@ public void ConfigureServices(IServiceCollection services)
     // Other configurations...
 }
 
-// appsettings.json
+// appsettings.json 
 {
   "ConnectionStrings": {
     "DefaultConnection": "Your_Connection_String_Here"
@@ -218,3 +218,6 @@ public void ConfigureServices(IServiceCollection services)
 // Run the Migrations
 dotnet ef migrations add InitialCreate
 dotnet ef database update
+
+Add-Migration Initial
+Update-Database
